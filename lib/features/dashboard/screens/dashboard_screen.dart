@@ -6,6 +6,7 @@ import 'package:supa_app/core/widgets/glass_card.dart';
 import 'package:supa_app/core/widgets/skeleton_loader.dart';
 import 'package:supa_app/features/project/screens/project_detail_screen.dart';
 import 'package:supa_app/features/settings/screens/settings_screen.dart';
+import 'package:supa_app/core/services/api_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -15,7 +16,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  final ApiService _apiService = ApiService();
   bool _isLoading = true;
+  List<dynamic> _projects = [];
+  List<dynamic> _organizations = [];
+  String? _selectedOrgId;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -24,9 +30,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _loadData() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _apiService.listProjects(),
+        _apiService.listOrganizations(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          _projects = results[0];
+          _organizations = results[1];
+          if (_organizations.isNotEmpty && _selectedOrgId == null) {
+            _selectedOrgId = _organizations.first['id'];
+          }
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to load cloud data';
+        });
+      }
     }
   }
 
@@ -56,26 +87,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               HapticFeedback.mediumImpact();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'org1',
+              ..._organizations.map((org) => PopupMenuItem(
+                value: org['id'],
                 child: Row(
                   children: [
-                    Icon(Icons.rocket_launch_rounded, size: 18, color: AppTheme.accent),
-                    SizedBox(width: 12),
-                    Text('Antigravity HQ', style: TextStyle(color: Colors.white, fontSize: 14)),
+                    const Icon(Icons.rocket_launch_rounded, size: 18, color: AppTheme.accent),
+                    const SizedBox(width: 12),
+                    Text(org['name'] ?? 'Unknown Org', style: const TextStyle(color: Colors.white, fontSize: 14)),
                   ],
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'org2',
-                child: Row(
-                  children: [
-                    Icon(Icons.layers_rounded, size: 18, color: AppTheme.secondary),
-                    SizedBox(width: 12),
-                    Text('Personal Stack', style: TextStyle(color: Colors.white, fontSize: 14)),
-                  ],
-                ),
-              ),
+              )),
               const PopupMenuDivider(),
               const PopupMenuItem(
                 value: 'add',
@@ -195,27 +216,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SliverToBoxAdapter(child: SizedBox(height: 12)),
                   SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildProjectCard(
-                        context,
-                        name: 'Staging Environment',
-                        status: 'Taking a nap 😴',
-                        cpu: '0.0%',
-                        ram: '0.0GB',
-                        nodeCount: 1,
-                        isPaused: true,
-                      ),
-                      _buildProjectCard(
-                        context,
-                        name: 'Analytics API',
-                        status: 'Breaking a sweat 🥵',
-                        cpu: '91.2%',
-                        ram: '7.8GB',
-                        nodeCount: 5,
-                        isPaused: false,
-                        hasAlert: true,
-                      ),
-                    ]),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final project = _projects[index];
+                        return _buildProjectCard(
+                          context,
+                          name: project['name'] ?? 'Untitled',
+                          status: project['status'] ?? 'UNKNOWN',
+                          cpu: '0.0%', // DashboardAPI doesn't provide real-time CPU yet
+                          ram: '0.0GB',
+                          nodeCount: 1,
+                          isPaused: project['status'] == 'PAUSED',
+                        );
+                      },
+                      childCount: _projects.length,
+                    ),
                   ),
                 ],
               ),

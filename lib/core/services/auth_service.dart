@@ -8,23 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Constants from the backend developer
-const String _authLoginUrl =
-    'https://api.supabase.com/v1/oauth/authorize'
-    '?client_id=706ae5db-0e85-4cf2-b35c-439639d59eca'
-    '&redirect_uri=com.supabasepulse%3A%2F%2Flogin-callback'
-    '&response_type=code'
-    '&code_challenge=IMBeZBPJ_ffAgrHJFVmrJztf12uA6_zexz5glhEw_gY'
-    '&code_challenge_method=S256'
-    '&state=NxLw-3oYUjcX2ffteMvnFg';
-
-const String _exchangeEndpoint =
-    'https://pulse.astraventa.online/api/auth/exchange';
-
-const String _codeVerifier =
-    'vUT8kiRPZLDjtz_b1twjsoGNdyF547VKIiQNyWcz8zc';
-
-const String _expectedState = 'NxLw-3oYUjcX2ffteMvnFg';
+import 'package:supa_app/core/config/app_config.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -36,7 +20,7 @@ class AuthService {
 
   /// Opens the authorization URL in the browser.
   Future<void> launchOAuthLogin() async {
-    final uri = Uri.parse(_authLoginUrl);
+    final uri = Uri.parse(AppConfig.loginUrl);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       throw Exception('Could not open the authorization URL.');
     }
@@ -65,7 +49,7 @@ class AuthService {
       final state = uri.queryParameters['state'];
 
       // Verify state to prevent CSRF attacks.
-      if (code == null || state != _expectedState) return false;
+      if (code == null || state != AppConfig.oauthState) return false;
 
       return await _exchangeCodeForTokens(code);
     } catch (_) {
@@ -77,12 +61,12 @@ class AuthService {
   Future<bool> _exchangeCodeForTokens(String code) async {
     try {
       final response = await http.post(
-        Uri.parse(_exchangeEndpoint),
+        Uri.parse('${AppConfig.apiBaseUrl}/api/auth/exchange'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'code': code,
-          'codeVerifier': _codeVerifier,
-          'state': _expectedState,
+          'codeVerifier': AppConfig.codeVerifier,
+          'state': AppConfig.oauthState,
         }),
       );
 
